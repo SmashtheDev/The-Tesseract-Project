@@ -6753,21 +6753,22 @@ impl eframe::App for TesseractApp {
 #[must_use]
 pub fn create_native_options() -> eframe::NativeOptions {
     let icon_data = create_icon_data();
+    info!("Icon data created: {}x{}, {} bytes", icon_data.width, icon_data.height, icon_data.rgba.len());
 
     eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title(APP_NAME)
             .with_inner_size([DEFAULT_WIDTH, DEFAULT_HEIGHT])
             .with_min_inner_size([MIN_WIDTH, MIN_HEIGHT])
-            .with_icon(std::sync::Arc::new(icon_data))
+            .with_icon(icon_data)
             // Set app_id for Wayland/Linux desktop integration
             .with_app_id("tesseract"),
         ..Default::default()
     }
 }
 
-/// Embedded application icon (256x256 PNG for better compatibility).
-const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-256x256.png");
+/// Embedded application icon (32x32 PNG - standard X11 window icon size).
+const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-32x32.png");
 
 /// Creates the application icon data.
 ///
@@ -6776,18 +6777,22 @@ const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-256x256.
 #[must_use]
 pub fn create_icon_data() -> egui::IconData {
     // Try to load the embedded PNG icon
-    if let Ok(img) = image::load_from_memory(ICON_BYTES) {
-        let rgba_image = img.to_rgba8();
-        let (width, height) = rgba_image.dimensions();
-        return egui::IconData {
-            rgba: rgba_image.into_raw(),
-            width,
-            height,
-        };
+    match image::load_from_memory(ICON_BYTES) {
+        Ok(img) => {
+            let rgba_image = img.to_rgba8();
+            let (width, height) = rgba_image.dimensions();
+            info!("Loaded application icon: {}x{} pixels", width, height);
+            egui::IconData {
+                rgba: rgba_image.into_raw(),
+                width,
+                height,
+            }
+        }
+        Err(e) => {
+            tracing::warn!("Failed to load PNG icon: {}, using fallback", e);
+            create_fallback_icon()
+        }
     }
-
-    // Fallback: generate a simple procedural icon
-    create_fallback_icon()
 }
 
 /// Creates a fallback procedural icon if PNG loading fails.
@@ -6974,9 +6979,9 @@ mod tests {
     #[test]
     fn test_create_icon_data() {
         let icon = create_icon_data();
-        // Icon should be 256x256 from PNG (or 64x64 from fallback)
-        assert!(icon.width == 256 || icon.width == 64);
-        assert!(icon.height == 256 || icon.height == 64);
+        // Icon should be 32x32 from PNG (or 64x64 from fallback)
+        assert!(icon.width == 32 || icon.width == 64);
+        assert!(icon.height == 32 || icon.height == 64);
         assert_eq!(icon.rgba.len(), (icon.width * icon.height * 4) as usize);
         // Verify RGBA data is valid (4 bytes per pixel)
         assert!(icon.rgba.len() > 0);
