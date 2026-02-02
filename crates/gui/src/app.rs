@@ -6764,20 +6764,40 @@ pub fn create_native_options() -> eframe::NativeOptions {
     }
 }
 
+/// Embedded application icon (64x64 PNG).
+const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-64x64.png");
+
 /// Creates the application icon data.
 ///
-/// This generates a simple geometric icon representing a secure vault/tesseract.
+/// Loads the embedded PNG icon and converts it to RGBA format for the window icon.
+/// Falls back to a procedural icon if PNG loading fails.
 #[must_use]
 pub fn create_icon_data() -> egui::IconData {
-    // Create a 64x64 icon with RGBA values
+    // Try to load the embedded PNG icon
+    if let Ok(img) = image::load_from_memory(ICON_BYTES) {
+        let rgba_image = img.to_rgba8();
+        let (width, height) = rgba_image.dimensions();
+        return egui::IconData {
+            rgba: rgba_image.into_raw(),
+            width,
+            height,
+        };
+    }
+
+    // Fallback: generate a simple procedural icon
+    create_fallback_icon()
+}
+
+/// Creates a fallback procedural icon if PNG loading fails.
+fn create_fallback_icon() -> egui::IconData {
     const SIZE: usize = 64;
     let mut rgba = vec![0u8; SIZE * SIZE * 4];
 
     // Colors: Teal/cyan theme for security
-    let bg_color = [20u8, 40, 60, 255];        // Dark blue background
-    let outline_color = [0u8, 180, 200, 255];  // Teal outline
-    let fill_color = [0u8, 120, 140, 255];     // Darker teal fill
-    let lock_color = [255u8, 215, 0, 255];     // Gold accent for lock
+    let bg_color = [20u8, 40, 60, 255];
+    let outline_color = [0u8, 180, 200, 255];
+    let fill_color = [0u8, 120, 140, 255];
+    let lock_color = [255u8, 215, 0, 255];
 
     // Fill background
     for y in 0..SIZE {
@@ -6787,12 +6807,10 @@ pub fn create_icon_data() -> egui::IconData {
         }
     }
 
-    // Draw a simple vault/cube shape (tesseract representation)
-    // Outer square (vault body)
+    // Draw vault shape
     for y in 12..52 {
         for x in 12..52 {
             let idx = (y * SIZE + x) * 4;
-            // Border check
             if y < 15 || y > 48 || x < 15 || x > 48 {
                 rgba[idx..idx + 4].copy_from_slice(&outline_color);
             } else {
@@ -6801,8 +6819,7 @@ pub fn create_icon_data() -> egui::IconData {
         }
     }
 
-    // Draw a lock symbol in the center (keyhole)
-    // Circle part of keyhole
+    // Draw lock symbol
     let center_x = SIZE / 2;
     let center_y = SIZE / 2 - 4;
     for y in 0..SIZE {
@@ -6810,7 +6827,6 @@ pub fn create_icon_data() -> egui::IconData {
             let dx = x as i32 - center_x as i32;
             let dy = y as i32 - center_y as i32;
             let dist_sq = dx * dx + dy * dy;
-            // Draw circle (radius 6)
             if dist_sq <= 36 && dist_sq >= 16 {
                 let idx = (y * SIZE + x) * 4;
                 rgba[idx..idx + 4].copy_from_slice(&lock_color);
@@ -6818,7 +6834,6 @@ pub fn create_icon_data() -> egui::IconData {
         }
     }
 
-    // Rectangle part of keyhole (below circle)
     for y in (center_y + 2)..(center_y + 12) {
         for x in (center_x - 3)..(center_x + 4) {
             let idx = (y * SIZE + x) * 4;
@@ -6957,13 +6972,23 @@ mod tests {
     #[test]
     fn test_create_icon_data() {
         let icon = create_icon_data();
+        // Icon should be 64x64 (either from PNG or fallback)
+        assert_eq!(icon.width, 64);
+        assert_eq!(icon.height, 64);
+        assert_eq!(icon.rgba.len(), 64 * 64 * 4);
+        // Verify RGBA data is valid (4 bytes per pixel)
+        assert!(icon.rgba.len() > 0);
+    }
+
+    #[test]
+    fn test_create_fallback_icon() {
+        let icon = create_fallback_icon();
         assert_eq!(icon.width, 64);
         assert_eq!(icon.height, 64);
         assert_eq!(icon.rgba.len(), 64 * 64 * 4);
 
-        // Verify all alpha values are set (no transparency bugs)
+        // Verify all alpha values are set (no transparency bugs in fallback)
         for chunk in icon.rgba.chunks(4) {
-            // Background should be opaque
             assert_eq!(chunk[3], 255, "All pixels should be opaque");
         }
     }

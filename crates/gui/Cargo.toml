@@ -30,6 +30,7 @@ serde_json.workspace = true
 dirs.workspace = true
 uuid.workspace = true
 zeroize.workspace = true
+image = { version = "0.24", default-features = false, features = ["png"] }
 
 [dev-dependencies]
 tempfile.workspace = true
