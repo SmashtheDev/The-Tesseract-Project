@@ -6759,13 +6759,15 @@ pub fn create_native_options() -> eframe::NativeOptions {
             .with_title(APP_NAME)
             .with_inner_size([DEFAULT_WIDTH, DEFAULT_HEIGHT])
             .with_min_inner_size([MIN_WIDTH, MIN_HEIGHT])
-            .with_icon(icon_data),
+            .with_icon(std::sync::Arc::new(icon_data))
+            // Set app_id for Wayland/Linux desktop integration
+            .with_app_id("tesseract"),
         ..Default::default()
     }
 }
 
-/// Embedded application icon (64x64 PNG).
-const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-64x64.png");
+/// Embedded application icon (256x256 PNG for better compatibility).
+const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-256x256.png");
 
 /// Creates the application icon data.
 ///
@@ -6972,10 +6974,10 @@ mod tests {
     #[test]
     fn test_create_icon_data() {
         let icon = create_icon_data();
-        // Icon should be 64x64 (either from PNG or fallback)
-        assert_eq!(icon.width, 64);
-        assert_eq!(icon.height, 64);
-        assert_eq!(icon.rgba.len(), 64 * 64 * 4);
+        // Icon should be 256x256 from PNG (or 64x64 from fallback)
+        assert!(icon.width == 256 || icon.width == 64);
+        assert!(icon.height == 256 || icon.height == 64);
+        assert_eq!(icon.rgba.len(), (icon.width * icon.height * 4) as usize);
         // Verify RGBA data is valid (4 bytes per pixel)
         assert!(icon.rgba.len() > 0);
     }

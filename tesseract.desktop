@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Type=Application
+Name=TESSERACT
+GenericName=Encrypted Vault
+Comment=Secure encrypted vault filesystem with multi-level access control
+Exec=tesseract
+Icon=tesseract
+Terminal=false
+Categories=Utility;Security;FileTools;
+Keywords=vault;encryption;secure;files;privacy;
+StartupWMClass=tesseract
