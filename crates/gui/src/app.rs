@@ -6767,8 +6767,8 @@ pub fn create_native_options() -> eframe::NativeOptions {
     }
 }
 
-/// Embedded application icon (32x32 PNG - standard X11 window icon size).
-const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-32x32.png");
+/// Embedded application icon (48x48 PNG - common taskbar icon size).
+const ICON_BYTES: &[u8] = include_bytes!("../../../images/png/tesseract-48x48.png");
 
 /// Creates the application icon data.
 ///
@@ -6781,9 +6781,19 @@ pub fn create_icon_data() -> egui::IconData {
         Ok(img) => {
             let rgba_image = img.to_rgba8();
             let (width, height) = rgba_image.dimensions();
-            info!("Loaded application icon: {}x{} pixels", width, height);
+            let rgba_vec = rgba_image.into_raw();
+
+            info!("Loaded application icon: {}x{} pixels, {} bytes", width, height, rgba_vec.len());
+
+            // Verify the icon has visible content (not all transparent)
+            let has_visible_pixels = rgba_vec.chunks(4).any(|pixel| pixel[3] > 0);
+            if !has_visible_pixels {
+                tracing::warn!("Icon appears to be fully transparent, using fallback");
+                return create_fallback_icon();
+            }
+
             egui::IconData {
-                rgba: rgba_image.into_raw(),
+                rgba: rgba_vec,
                 width,
                 height,
             }
@@ -6979,9 +6989,9 @@ mod tests {
     #[test]
     fn test_create_icon_data() {
         let icon = create_icon_data();
-        // Icon should be 32x32 from PNG (or 64x64 from fallback)
-        assert!(icon.width == 32 || icon.width == 64);
-        assert!(icon.height == 32 || icon.height == 64);
+        // Icon should be 48x48 from PNG (or 64x64 from fallback)
+        assert!(icon.width == 48 || icon.width == 64);
+        assert!(icon.height == 48 || icon.height == 64);
         assert_eq!(icon.rgba.len(), (icon.width * icon.height * 4) as usize);
         // Verify RGBA data is valid (4 bytes per pixel)
         assert!(icon.rgba.len() > 0);
