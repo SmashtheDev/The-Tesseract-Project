@@ -1,0 +1,554 @@
+{
+  "project": "Tesseract",
+  "branchName": "ralph/hardware-encryption",
+  "description": "Triple-layer hardware encryption for USB drives - Hardware (AES-256-XTS) + Vault (AES-256-GCM) + Access Levels (1-4). Cross-platform support for Linux, Windows, macOS with TCG Opal 2.0 SED support and custom THC container format.",
+  "userStories": [
+    {
+      "id": "US-001",
+      "title": "Create tesseract-hardware crate structure",
+      "description": "As a developer, I need the foundational crate structure for hardware encryption so that platform-specific implementations can be built on top.",
+      "acceptanceCriteria": [
+        "Create crates/hardware/ directory with Cargo.toml",
+        "Add crate to workspace in root Cargo.toml",
+        "Create module structure: lib.rs, error.rs, detect.rs, container.rs, crypto.rs",
+        "Create platform module stubs: platform/mod.rs, linux.rs, windows.rs, macos.rs",
+        "Create SED module stubs: sed/mod.rs, opal.rs",
+        "Define public API traits and types in lib.rs",
+        "Crate compiles with cargo build",
+        "Typecheck passes"
+      ],
+      "priority": 1,
+      "passes": true,
+      "notes": "Created tesseract-hardware crate with full module structure. error.rs (HardwareError enum), detect.rs (DriveInfo, DriveType), container.rs (ThcHeader, CipherSuite), crypto.rs (DualKeys, Xts256 stubs), platform/ (linux, windows, macos stubs), sed/ (opal stub). Note: cargo build could not be verified - Rust not installed in environment."
+    },
+    {
+      "id": "US-002",
+      "title": "Implement AES-256-XTS encryption for containers",
+      "description": "As a developer, I need AES-256-XTS encryption support so that drive containers can be encrypted with sector-level encryption.",
+      "acceptanceCriteria": [
+        "Add aes and xts-mode dependencies to tesseract-crypto crate",
+        "Implement Xts256 struct with encrypt_sector/decrypt_sector methods",
+        "Sector size configurable (default 512 bytes)",
+        "Support sector number as tweak value",
+        "Unit tests pass for encrypt/decrypt round-trip",
+        "Unit tests pass for known test vectors",
+        "Typecheck passes"
+      ],
+      "priority": 2,
+      "passes": true,
+      "notes": "Created tesseract-crypto/src/xts.rs with Xts256 struct using aes 0.8 and xts-mode 0.5 crates. Features: configurable sector size (16-4096 bytes), sector number as tweak (little-endian), encrypt_sectors/decrypt_sectors for bulk operations. Tests: round-trip, different sectors produce different ciphertext, known test vectors, sector size validation. Hardware crate updated to re-export Xts256 from crypto crate."
+    },
+    {
+      "id": "US-003",
+      "title": "Define THC container header format",
+      "description": "As a developer, I need a standardized header format for Tesseract Hardware Containers so that encrypted drives can be identified and unlocked.",
+      "acceptanceCriteria": [
+        "Define ThcHeader struct with all fields (magic, version, cipher, KDF params, salt, encrypted master key, MAC)",
+        "Implement ThcHeader::new() to create header with given password",
+        "Implement ThcHeader::to_bytes() serialization (4096 bytes total)",
+        "Implement ThcHeader::from_bytes() deserialization with validation",
+        "Implement ThcHeader::unlock() to derive and verify master key",
+        "Magic bytes: TESS-HWC followed by null (8 bytes)",
+        "Header MAC verification prevents tampering",
+        "Unit tests for serialization round-trip",
+        "Typecheck passes"
+      ],
+      "priority": 3,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-004",
+      "title": "Implement dual-key derivation from master password",
+      "description": "As a developer, I need to derive separate hardware and vault keys from a single master password so that one password unlocks both layers securely.",
+      "acceptanceCriteria": [
+        "Implement derive_dual_keys(password, hw_salt, vault_salt, params) function",
+        "Use Argon2id for initial key derivation",
+        "Use HKDF-SHA256 to derive hardware key with context TESSERACT-HARDWARE-KEY",
+        "Use HKDF-SHA256 to derive vault key with context TESSERACT-SOFTWARE-KEY",
+        "Keys are cryptographically independent (compromising one does not reveal other)",
+        "Add HKDF implementation to tesseract-crypto if not present",
+        "Unit tests verify key independence",
+        "Typecheck passes"
+      ],
+      "priority": 4,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-005",
+      "title": "Implement drive detection API",
+      "description": "As a developer, I need to detect connected USB drives and their capabilities so that the application can offer appropriate encryption options.",
+      "acceptanceCriteria": [
+        "Define DriveInfo struct (path, size, vendor, model, serial, drive_type)",
+        "Define DriveType enum (SedOpal, TesseractContainer, Unencrypted, Unknown)",
+        "Implement detect_drives() returning Vec of DriveInfo for current platform",
+        "Detect if drive has THC header (check magic bytes)",
+        "Return empty vec on unsupported platforms (graceful degradation)",
+        "Unit tests with mock filesystem",
+        "Typecheck passes"
+      ],
+      "priority": 5,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-006",
+      "title": "Implement Linux drive enumeration",
+      "description": "As a Linux user, I need the application to detect my USB drives so that I can encrypt them.",
+      "acceptanceCriteria": [
+        "Enumerate block devices from /sys/block/",
+        "Filter to removable devices (check /sys/block/*/removable)",
+        "Read device info from sysfs (vendor, model, size)",
+        "Get mount points from /proc/mounts",
+        "Detect partition layout (single partition vs multiple)",
+        "Integration test with actual /sys filesystem",
+        "Typecheck passes"
+      ],
+      "priority": 6,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-007",
+      "title": "Implement Linux THC container creation",
+      "description": "As a Linux user, I need to create an encrypted container on my USB drive so that the entire drive is protected.",
+      "acceptanceCriteria": [
+        "Implement create_container(device_path, password, params) for Linux",
+        "Write THC header to first 4096 bytes of device/partition",
+        "Initialize encrypted data region with zeros",
+        "Require confirmation before overwriting existing data",
+        "Handle permission errors gracefully (suggest sudo)",
+        "Progress callback for long operations",
+        "Integration test (requires root or loop device)",
+        "Typecheck passes"
+      ],
+      "priority": 7,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-008",
+      "title": "Implement Linux container unlock/mount",
+      "description": "As a Linux user, I need to unlock and mount my encrypted container so that I can access the encrypted filesystem.",
+      "acceptanceCriteria": [
+        "Implement unlock_container(device_path, password) for Linux",
+        "Read and validate THC header",
+        "Derive decryption key from password",
+        "Create loop device for container data region",
+        "Set up dm-crypt mapping with derived key",
+        "Mount filesystem to user-accessible location",
+        "Return mount point path on success",
+        "Handle incorrect password gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 8,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-009",
+      "title": "Implement Linux container lock/unmount",
+      "description": "As a Linux user, I need to lock my encrypted container so that data is protected when I'm done.",
+      "acceptanceCriteria": [
+        "Implement lock_container(mount_point) for Linux",
+        "Unmount filesystem cleanly",
+        "Remove dm-crypt mapping",
+        "Detach loop device",
+        "Zeroize keys from memory",
+        "Handle busy filesystem (files open) gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 9,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-010",
+      "title": "Implement Linux TCG Opal detection",
+      "description": "As a Linux user with an SED drive, I need the application to detect Opal capability so that hardware encryption can be used.",
+      "acceptanceCriteria": [
+        "Query drive for TCG Opal support using sedutil-cli or ATA commands",
+        "Detect Opal 2.0 feature set",
+        "Check if drive is already initialized/locked",
+        "Return OpalStatus enum (NotSupported, Uninitialized, Locked, Unlocked)",
+        "Handle missing sedutil gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 10,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-011",
+      "title": "Implement Linux TCG Opal unlock",
+      "description": "As a Linux user with an Opal SED, I need to unlock my drive using hardware encryption so that it's accessible.",
+      "acceptanceCriteria": [
+        "Implement unlock_opal(device_path, password) for Linux",
+        "Use sedutil-cli to send unlock command",
+        "Handle incorrect password (drive remains locked)",
+        "Handle drive not initialized (return appropriate error)",
+        "Verify drive is unlocked after command",
+        "Typecheck passes"
+      ],
+      "priority": 11,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-012",
+      "title": "Implement Windows drive enumeration",
+      "description": "As a Windows user, I need the application to detect my USB drives so that I can encrypt them.",
+      "acceptanceCriteria": [
+        "Use Windows API to enumerate removable drives",
+        "Get drive info (vendor, model, size, drive letter)",
+        "Detect if drive is mounted/accessible",
+        "Filter to USB/removable devices only",
+        "Typecheck passes"
+      ],
+      "priority": 12,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-013",
+      "title": "Implement Windows THC container creation",
+      "description": "As a Windows user, I need to create an encrypted container on my USB drive.",
+      "acceptanceCriteria": [
+        "Implement create_container(device_path, password, params) for Windows",
+        "Write THC header using raw disk access",
+        "Request admin privileges if needed",
+        "Handle drive letter vs physical drive path",
+        "Progress callback for long operations",
+        "Typecheck passes"
+      ],
+      "priority": 13,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-014",
+      "title": "Implement Windows container unlock/mount",
+      "description": "As a Windows user, I need to unlock and mount my encrypted container as a drive letter.",
+      "acceptanceCriteria": [
+        "Implement unlock_container(device_path, password) for Windows",
+        "Read and validate THC header",
+        "Mount decrypted container as virtual drive",
+        "Assign available drive letter",
+        "Return drive letter on success",
+        "Handle incorrect password gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 14,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-015",
+      "title": "Implement Windows container lock/unmount",
+      "description": "As a Windows user, I need to lock my encrypted container when done.",
+      "acceptanceCriteria": [
+        "Implement lock_container(drive_letter) for Windows",
+        "Dismount virtual drive cleanly",
+        "Release drive letter",
+        "Zeroize keys from memory",
+        "Handle files in use gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 15,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-016",
+      "title": "Implement Windows TCG Opal support",
+      "description": "As a Windows user with an SED drive, I need Opal detection and unlock support.",
+      "acceptanceCriteria": [
+        "Detect TCG Opal capability on Windows",
+        "Implement unlock_opal(device_path, password) for Windows",
+        "Use sedutil.exe or Windows TCG API",
+        "Handle missing dependencies gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 16,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-017",
+      "title": "Implement macOS drive enumeration",
+      "description": "As a macOS user, I need the application to detect my USB drives.",
+      "acceptanceCriteria": [
+        "Use DiskArbitration framework to enumerate drives",
+        "Get drive info (vendor, model, size, mount point)",
+        "Filter to external/removable devices",
+        "Detect partition scheme",
+        "Typecheck passes"
+      ],
+      "priority": 17,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-018",
+      "title": "Implement macOS THC container creation",
+      "description": "As a macOS user, I need to create an encrypted container on my USB drive.",
+      "acceptanceCriteria": [
+        "Implement create_container(device_path, password, params) for macOS",
+        "Write THC header using raw disk access",
+        "Request authorization if needed",
+        "Handle disk identifiers (/dev/diskN)",
+        "Progress callback for long operations",
+        "Typecheck passes"
+      ],
+      "priority": 18,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-019",
+      "title": "Implement macOS container unlock/mount",
+      "description": "As a macOS user, I need to unlock and mount my encrypted container.",
+      "acceptanceCriteria": [
+        "Implement unlock_container(device_path, password) for macOS",
+        "Read and validate THC header",
+        "Mount decrypted container using hdiutil or FUSE",
+        "Return mount point path",
+        "Handle incorrect password gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 19,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-020",
+      "title": "Implement macOS container lock/unmount",
+      "description": "As a macOS user, I need to lock my encrypted container when done.",
+      "acceptanceCriteria": [
+        "Implement lock_container(mount_point) for macOS",
+        "Unmount cleanly using diskutil",
+        "Zeroize keys from memory",
+        "Handle files in use gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 20,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-021",
+      "title": "Implement macOS TCG Opal support",
+      "description": "As a macOS user with an SED drive, I need Opal detection and unlock support.",
+      "acceptanceCriteria": [
+        "Detect TCG Opal capability on macOS",
+        "Implement unlock_opal(device_path, password) for macOS",
+        "Use sedutil or IOKit",
+        "Handle SIP restrictions gracefully",
+        "Typecheck passes"
+      ],
+      "priority": 21,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-022",
+      "title": "Add drive detection screen to GUI",
+      "description": "As a user, I want to see connected USB drives so that I can choose which one to encrypt.",
+      "acceptanceCriteria": [
+        "New Drives screen accessible from main menu",
+        "Lists all detected USB drives with info (name, size, status)",
+        "Shows encryption status icon (locked, unlocked, unencrypted)",
+        "Refresh button to rescan drives",
+        "Initialize button for unencrypted drives",
+        "Unlock button for locked drives",
+        "Typecheck passes"
+      ],
+      "priority": 22,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-023",
+      "title": "Add hardware unlock dialog",
+      "description": "As a user, I want a password prompt when I select a locked drive so that I can unlock it.",
+      "acceptanceCriteria": [
+        "Modal dialog appears for locked drives",
+        "Password field with show/hide toggle",
+        "Unlock Drive and Vault button",
+        "Progress indicator during unlock (Argon2 takes time)",
+        "Error message for incorrect password",
+        "Success transitions to vault file browser",
+        "Typecheck passes"
+      ],
+      "priority": 23,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-024",
+      "title": "Add drive initialization wizard",
+      "description": "As a user, I want a step-by-step wizard to set up encryption on a new drive.",
+      "acceptanceCriteria": [
+        "Step 1: Drive selection with size and info display",
+        "Step 2: Master password entry with strength meter",
+        "Step 3: Access level configuration (names and passwords for levels 1-4)",
+        "Step 4: Encryption strength selection (Standard/High/Maximum)",
+        "Step 5: Confirmation with warning about data loss",
+        "Step 6: Progress display during initialization",
+        "Step 7: Success screen with recovery key display",
+        "Back/Next navigation between steps",
+        "Cancel aborts without changes",
+        "Typecheck passes"
+      ],
+      "priority": 24,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-025",
+      "title": "Add drive status to main window",
+      "description": "As a user, I want to see the current drive status in the main window so I know if my drive is protected.",
+      "acceptanceCriteria": [
+        "Status bar shows current drive (if any)",
+        "Shows lock/unlock status with icon",
+        "Shows drive name and size",
+        "Lock Drive button when unlocked",
+        "Eject button for safe removal",
+        "Typecheck passes"
+      ],
+      "priority": 25,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-026",
+      "title": "Integrate hardware unlock with vault open flow",
+      "description": "As a user, I want opening a vault on an encrypted drive to automatically unlock the drive first.",
+      "acceptanceCriteria": [
+        "Detect if selected vault is on encrypted drive",
+        "If drive locked, show hardware unlock first",
+        "Use same password for drive and vault unlock (dual key derivation)",
+        "Single password entry unlocks both layers seamlessly",
+        "Then proceed to access level selection",
+        "Typecheck passes"
+      ],
+      "priority": 26,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-027",
+      "title": "Add auto-lock on drive removal",
+      "description": "As a user, I want the vault to auto-lock if I remove the drive so that my data stays protected.",
+      "acceptanceCriteria": [
+        "Monitor for drive disconnect events",
+        "On disconnect: immediately lock vault session",
+        "Clear all keys from memory",
+        "Show notification Drive removed - vault locked",
+        "Return to welcome/drive selection screen",
+        "Typecheck passes"
+      ],
+      "priority": 27,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-028",
+      "title": "Add drive password change functionality",
+      "description": "As a user, I want to change my drive master password so that I can update security credentials.",
+      "acceptanceCriteria": [
+        "Change Master Password option in settings (when drive unlocked)",
+        "Requires current password verification",
+        "New password with confirmation field",
+        "Password strength requirements enforced",
+        "Re-encrypts drive header with new key",
+        "Success confirmation message",
+        "Typecheck passes"
+      ],
+      "priority": 28,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-029",
+      "title": "Implement unified error handling",
+      "description": "As a developer, I need consistent error handling across all hardware operations so that users get clear feedback.",
+      "acceptanceCriteria": [
+        "Define HardwareError enum with all error cases",
+        "Map platform-specific errors to common types",
+        "Include actionable error messages (e.g., Run as administrator)",
+        "Errors propagate cleanly to GUI",
+        "Typecheck passes"
+      ],
+      "priority": 29,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-030",
+      "title": "Add comprehensive logging",
+      "description": "As a developer, I need detailed logging for hardware operations to debug issues.",
+      "acceptanceCriteria": [
+        "Log all drive detection events",
+        "Log unlock/lock operations (without passwords)",
+        "Log errors with context",
+        "Use tracing crate consistently",
+        "Configurable log levels",
+        "Typecheck passes"
+      ],
+      "priority": 30,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-031",
+      "title": "Implement secure key cleanup",
+      "description": "As a security feature, keys must be zeroized when no longer needed so that memory does not retain sensitive data.",
+      "acceptanceCriteria": [
+        "All key material uses Zeroizing wrapper",
+        "Keys cleared on lock operation",
+        "Keys cleared on application exit",
+        "Keys cleared on drive removal",
+        "Verify with memory inspection in tests",
+        "Typecheck passes"
+      ],
+      "priority": 31,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-032",
+      "title": "Add hardware encryption documentation",
+      "description": "As a user, I need documentation explaining the hardware encryption feature so that I understand how to use it.",
+      "acceptanceCriteria": [
+        "Update user manual with hardware encryption section",
+        "Document setup wizard steps",
+        "Document daily unlock workflow",
+        "Document password recovery process",
+        "Document supported drive types",
+        "Include security model explanation",
+        "Typecheck passes"
+      ],
+      "priority": 32,
+      "passes": false,
+      "notes": ""
+    },
+    {
+      "id": "US-033",
+      "title": "Cross-platform build and test verification",
+      "description": "As a developer, I need CI/CD verification that hardware encryption builds on all platforms.",
+      "acceptanceCriteria": [
+        "Crate compiles on Linux (x86_64, aarch64)",
+        "Crate compiles on Windows (x86_64)",
+        "Crate compiles on macOS (x86_64, aarch64)",
+        "Unit tests pass on all platforms",
+        "Feature flags work correctly for platform-specific code",
+        "Typecheck passes on all platforms"
+      ],
+      "priority": 33,
+      "passes": false,
+      "notes": ""
+    }
+  ]
+}

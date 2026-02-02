@@ -1,0 +1,25 @@
+[package]
+name = "tesseract-cli"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Command-line interface for TESSERACT"
+
+[dependencies]
+tesseract-core = { path = "../core" }
+tesseract-crypto = { path = "../crypto" }
+tesseract-packaging = { path = "../packaging" }
+clap.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+anyhow.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+default = []
+
+[lints]
+workspace = true

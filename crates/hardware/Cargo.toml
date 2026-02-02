@@ -1,0 +1,60 @@
+[package]
+name = "tesseract-hardware"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Hardware encryption support for TESSERACT - THC containers, TCG Opal SED, cross-platform drive detection"
+
+[dependencies]
+# Internal dependencies
+tesseract-crypto = { path = "../crypto" }
+
+# Cryptography
+aes-gcm.workspace = true
+zeroize.workspace = true
+
+# Serialization
+serde.workspace = true
+bincode.workspace = true
+
+# Error handling
+thiserror.workspace = true
+
+# Logging
+tracing.workspace = true
+
+# UUID
+uuid.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+nix = { version = "0.28", features = ["ioctl", "fs", "mount"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+# Linux-specific: dm-crypt, loop devices
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = [
+    "Win32_Foundation",
+    "Win32_Storage_FileSystem",
+    "Win32_System_IO",
+    "Win32_System_Ioctl",
+    "Win32_Security",
+] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+# macOS-specific: DiskArbitration framework bindings would go here
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+default = []
+# Enable TCG Opal SED support (requires sedutil)
+opal = []
+# Enable Linux dm-crypt support
+dm-crypt = []
+
+[lints]
+workspace = true

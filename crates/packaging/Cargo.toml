@@ -1,0 +1,25 @@
+[package]
+name = "tesseract-packaging"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Packaging utilities for TESSERACT (USB preparation, bundling)"
+
+[dependencies]
+tesseract-core = { path = "../core" }
+thiserror.workspace = true
+tracing.workspace = true
+dirs.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+default = []
+
+[lints]
+workspace = true

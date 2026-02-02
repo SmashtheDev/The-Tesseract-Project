@@ -1,0 +1,40 @@
+[package]
+name = "tesseract-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Cross-platform GUI for TESSERACT"
+
+[[bin]]
+name = "tesseract"
+path = "src/main.rs"
+
+[lib]
+name = "tesseract_gui"
+path = "src/lib.rs"
+
+[dependencies]
+tesseract-core = { path = "../core" }
+tesseract-crypto = { path = "../crypto" }
+tesseract-vfs = { path = "../vfs" }
+tesseract-hardware = { path = "../hardware" }
+eframe.workspace = true
+egui.workspace = true
+rfd.workspace = true
+tracing.workspace = true
+tracing-subscriber.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+dirs.workspace = true
+uuid.workspace = true
+zeroize.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+default = []
+
+[lints]
+workspace = true

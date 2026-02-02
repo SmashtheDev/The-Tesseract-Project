@@ -1,0 +1,92 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/core",
+    "crates/crypto",
+    "crates/vfs",
+    "crates/gui",
+    "crates/cli",
+    "crates/packaging",
+    "crates/hardware",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+authors = ["TESSERACT Team"]
+license = "MIT"
+description = "Production-grade removable storage encryption with AES-256-GCM"
+repository = "https://github.com/tesseract/tesseract"
+rust-version = "1.75"
+
+[workspace.dependencies]
+# Cryptography
+aes-gcm = "0.10"
+aes = "0.8"
+xts-mode = "0.5"
+argon2 = "0.5"
+hmac = "0.12"
+sha2 = "0.10"
+getrandom = "0.2"
+zeroize = { version = "1.7", features = ["derive"] }
+cpufeatures = "0.2"
+bip39 = "2.0"
+
+# Serialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+serde_bytes = "0.11"
+bincode = "1.3"
+
+# Async and concurrency
+tokio = { version = "1.35", features = ["full"] }
+
+# Error handling
+thiserror = "1.0"
+anyhow = "1.0"
+
+# Logging
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+# UUID
+uuid = { version = "1.6", features = ["v4", "serde"] }
+
+# GUI (egui)
+eframe = "0.28"
+egui = "0.28"
+rfd = "0.14"
+dirs = "5.0"
+
+# VFS - Filesystem
+fuser = "0.14"  # Linux/macOS FUSE
+dokan = "0.3"   # Windows Dokan bindings
+
+# CLI
+clap = { version = "4.4", features = ["derive"] }
+
+# Testing
+tempfile = "3.9"
+criterion = "0.5"
+
+# Platform-specific (defined in individual crates)
+# windows-sys used by: packaging, vfs crates
+
+[workspace.lints.rust]
+unsafe_code = "warn"
+missing_docs = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+pedantic = "warn"
+nursery = "warn"
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+strip = true
+
+[profile.dev]
+opt-level = 0
+debug = true

@@ -1,0 +1,33 @@
+[package]
+name = "tesseract-vfs"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Virtual filesystem integration for TESSERACT"
+
+[dependencies]
+tesseract-core = { path = "../core" }
+tesseract-crypto = { path = "../crypto" }
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+fuser.workspace = true
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_System_Registry", "Win32_Foundation", "Win32_Storage_FileSystem"] }
+dokan = { workspace = true }
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+default = []
+fuse = []
+dokan = []
+
+[lints]
+workspace = true

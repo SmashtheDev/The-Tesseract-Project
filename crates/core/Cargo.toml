@@ -1,0 +1,28 @@
+[package]
+name = "tesseract-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core vault management for TESSERACT encryption"
+
+[dependencies]
+tesseract-crypto = { path = "../crypto" }
+serde.workspace = true
+serde_json.workspace = true
+serde_bytes.workspace = true
+bincode.workspace = true
+uuid.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+zeroize.workspace = true
+getrandom.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[features]
+default = []
+
+[lints]
+workspace = true

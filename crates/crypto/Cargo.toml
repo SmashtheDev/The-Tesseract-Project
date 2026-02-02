@@ -1,0 +1,40 @@
+[package]
+name = "tesseract-crypto"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Cryptographic primitives for TESSERACT encryption"
+
+[dependencies]
+aes-gcm.workspace = true
+aes.workspace = true
+xts-mode.workspace = true
+argon2.workspace = true
+hmac.workspace = true
+sha2.workspace = true
+getrandom.workspace = true
+zeroize.workspace = true
+cpufeatures.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+bip39.workspace = true
+serde.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+libc = "0.2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.52", features = ["Win32_System_Memory"] }
+
+[dev-dependencies]
+tempfile.workspace = true
+criterion.workspace = true
+
+[features]
+default = []
+hardware-accel = []
+
+[lints]
+workspace = true
