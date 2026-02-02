@@ -7257,8 +7257,8 @@ mod tests {
 
         app.lock_vault();
 
-        // Should be reset
-        assert_eq!(app.file_browser_state.current_path, "");
+        // Should be reset to root (FileBrowserState::new() defaults to "/")
+        assert_eq!(app.file_browser_state.current_path, "/");
     }
 
     #[test]

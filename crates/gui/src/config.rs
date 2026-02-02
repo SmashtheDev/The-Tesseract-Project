@@ -100,8 +100,15 @@ impl AppConfig {
     /// and its timestamp is updated.
     pub fn add_recent_vault(&mut self, path: PathBuf) {
         // Remove existing entry with same path
-        self.recent_vaults
-            .retain(|v| v.path.canonicalize().ok() != path.canonicalize().ok());
+        // Use canonicalize if possible, otherwise compare raw paths
+        let canonical_new = path.canonicalize().ok();
+        self.recent_vaults.retain(|v| {
+            let canonical_existing = v.path.canonicalize().ok();
+            match (&canonical_existing, &canonical_new) {
+                (Some(a), Some(b)) => a != b,
+                _ => v.path != path, // Fall back to direct comparison
+            }
+        });
 
         // Add new entry at the front
         let vault = RecentVault::new(path);
@@ -113,8 +120,14 @@ impl AppConfig {
 
     /// Removes a vault from the recent list.
     pub fn remove_recent_vault(&mut self, path: &Path) {
-        self.recent_vaults
-            .retain(|v| v.path.canonicalize().ok() != path.canonicalize().ok());
+        let canonical_remove = path.canonicalize().ok();
+        self.recent_vaults.retain(|v| {
+            let canonical_existing = v.path.canonicalize().ok();
+            match (&canonical_existing, &canonical_remove) {
+                (Some(a), Some(b)) => a != b,
+                _ => v.path != path, // Fall back to direct comparison
+            }
+        });
     }
 
     /// Clears all recent vaults.

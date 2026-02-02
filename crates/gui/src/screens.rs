@@ -1693,25 +1693,15 @@ fn normalize_path(path: &str) -> String {
         return "/".to_string();
     }
 
-    let mut result = String::new();
-    if !path.starts_with('/') {
-        result.push('/');
+    // Collect non-empty path components
+    let parts: Vec<&str> = path.split('/').filter(|p| !p.is_empty()).collect();
+
+    if parts.is_empty() {
+        return "/".to_string();
     }
 
-    for part in path.split('/') {
-        if !part.is_empty() {
-            if result.len() > 1 {
-                result.push('/');
-            }
-            result.push_str(part);
-        }
-    }
-
-    if result.is_empty() {
-        "/".to_string()
-    } else {
-        result
-    }
+    // Build normalized path with leading slash
+    format!("/{}", parts.join("/"))
 }
 
 /// Gets the parent path of a virtual path.
@@ -5104,23 +5094,24 @@ mod tests {
 
     #[test]
     fn test_password_strength_weak() {
-        // 8 chars but low variety
+        // 8 chars but low variety (no common patterns)
         assert_eq!(calculate_password_strength("password"), PasswordStrength::VeryWeak); // Contains "password"
-        assert_eq!(calculate_password_strength("abcdefgh"), PasswordStrength::Weak); // No variety
+        // Use a password with only lowercase, 8+ chars, no common patterns
+        assert_eq!(calculate_password_strength("longword"), PasswordStrength::Weak); // 8 chars, 1 variety = score 2
     }
 
     #[test]
     fn test_password_strength_fair() {
-        // Mix of chars, decent length
-        let strength = calculate_password_strength("Abcdef12");
-        assert!(strength.is_acceptable());
+        // Mix of chars, decent length (avoid "abc" pattern)
+        let strength = calculate_password_strength("MyPass99");
+        assert!(strength.is_acceptable()); // 8 chars, 3 variety = score 4 (Fair)
     }
 
     #[test]
     fn test_password_strength_strong() {
-        // Good mix, longer
-        let strength = calculate_password_strength("Abcdef12!@");
-        assert!(matches!(strength, PasswordStrength::Strong | PasswordStrength::VeryStrong));
+        // Good mix, longer (avoid "abc" pattern)
+        let strength = calculate_password_strength("MyPass99!#");
+        assert!(matches!(strength, PasswordStrength::Strong | PasswordStrength::VeryStrong)); // 10 chars, 4 variety = score 5
     }
 
     #[test]
