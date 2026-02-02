@@ -3797,6 +3797,7 @@ dependencies = [
  "tesseract-core",
  "tesseract-crypto",
  "tesseract-hardware",
+ "tesseract-packaging",
  "tesseract-vfs",
  "tracing",
  "tracing-subscriber",

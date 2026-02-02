@@ -19,6 +19,7 @@ tesseract-core = { path = "../core" }
 tesseract-crypto = { path = "../crypto" }
 tesseract-vfs = { path = "../vfs" }
 tesseract-hardware = { path = "../hardware" }
+tesseract-packaging = { path = "../packaging" }
 eframe.workspace = true
 egui.workspace = true
 rfd.workspace = true

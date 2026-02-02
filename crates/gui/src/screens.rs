@@ -2899,7 +2899,7 @@ impl VaultCreationWizardState {
         match validate_new_vault_location(&path) {
             Ok(()) => {
                 // Path is valid, check if removable
-                #[cfg(windows)]
+                #[cfg(any(windows, target_os = "linux"))]
                 {
                     use tesseract_packaging::detection::is_removable_drive;
                     match is_removable_drive(&path) {
@@ -2919,9 +2919,9 @@ impl VaultCreationWizardState {
                         }
                     }
                 }
-                #[cfg(not(windows))]
+                #[cfg(not(any(windows, target_os = "linux")))]
                 {
-                    // Non-Windows: assume removable (TODO: implement Linux detection)
+                    // macOS and other platforms: assume removable until detection is implemented
                     self.is_removable = Some(true);
                 }
             }

@@ -13,7 +13,7 @@ tracing.workspace = true
 dirs.workspace = true
 
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.52", features = ["Win32_Storage_FileSystem", "Win32_Foundation"] }
+windows-sys = { version = "0.52", features = ["Win32_Storage_FileSystem", "Win32_System_WindowsProgramming", "Win32_Foundation"] }
 
 [dev-dependencies]
 tempfile.workspace = true
