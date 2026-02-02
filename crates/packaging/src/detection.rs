@@ -595,9 +595,15 @@ mod linux_impl {
 
         #[test]
         fn test_extract_block_device_loop() {
+            // Loop devices (loop0, loop1, etc.) are separate devices, not partitions.
+            // The full device name is needed for sysfs lookups like /sys/block/loop0/removable.
             assert_eq!(
                 extract_block_device("/dev/loop0"),
-                Some("loop".to_string())
+                Some("loop0".to_string())
+            );
+            assert_eq!(
+                extract_block_device("/dev/loop1"),
+                Some("loop1".to_string())
             );
         }
 

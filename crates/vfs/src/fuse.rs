@@ -3259,15 +3259,15 @@ mod tests {
 
     #[test]
     fn test_vault_error_to_errno() {
-        assert_eq!(vault_error_to_errno(&VaultError::FileNotFound), libc::ENOENT);
+        assert_eq!(vault_error_to_errno(&VaultError::FileNotFound("test".to_string())), libc::ENOENT);
         assert_eq!(vault_error_to_errno(&VaultError::AccessDenied), libc::EACCES);
         assert_eq!(vault_error_to_errno(&VaultError::VaultLocked), libc::EACCES);
         assert_eq!(
-            vault_error_to_errno(&VaultError::InvalidPath("test".to_string())),
+            vault_error_to_errno(&VaultError::InvalidData("test".to_string())),
             libc::EINVAL
         );
         assert_eq!(
-            vault_error_to_errno(&VaultError::IntegrityError("test".to_string())),
+            vault_error_to_errno(&VaultError::HeaderIntegrityFailed),
             libc::EIO
         );
     }
@@ -3289,11 +3289,11 @@ mod tests {
             libc::EISDIR
         );
         assert_eq!(
-            vfs_error_to_errno(&VfsError::DiskFull { path: "test".to_string() }),
+            vfs_error_to_errno(&VfsError::DiskFull { requested_bytes: 1000, available_bytes: 0 }),
             libc::ENOSPC
         );
         assert_eq!(
-            vfs_error_to_errno(&VfsError::NameTooLong { name: "test".to_string(), max_length: 255 }),
+            vfs_error_to_errno(&VfsError::NameTooLong { name: "test".to_string(), length: 300, max_length: 255 }),
             libc::ENAMETOOLONG
         );
     }

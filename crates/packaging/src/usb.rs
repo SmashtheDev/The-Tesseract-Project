@@ -349,6 +349,7 @@ fn copy_or_create_executables(
 }
 
 /// Copies executables from a source directory.
+/// Creates placeholders for any missing executables.
 fn copy_executables(
     tesseract_dir: &Path,
     source: &Path,
@@ -362,7 +363,9 @@ fn copy_executables(
         copy_file(&windows_src, &windows_dst)?;
         files_created.push(windows_dst);
     } else {
-        warnings.push(format!("Windows executable not found: {windows_src:?}"));
+        warnings.push(format!("Windows executable not found: {windows_src:?}; creating placeholder"));
+        write_placeholder(&windows_dst, "Windows")?;
+        files_created.push(windows_dst);
     }
 
     // Linux AppImage
@@ -388,7 +391,18 @@ fn copy_executables(
         }
         files_created.push(linux_dst);
     } else {
-        warnings.push(format!("Linux AppImage not found: {linux_src:?}"));
+        warnings.push(format!("Linux AppImage not found: {linux_src:?}; creating placeholder"));
+        write_placeholder(&linux_dst, "Linux")?;
+        #[cfg(unix)]
+        {
+            use std::os::unix::fs::PermissionsExt;
+            if let Ok(metadata) = fs::metadata(&linux_dst) {
+                let mut perms = metadata.permissions();
+                perms.set_mode(0o755);
+                let _ = fs::set_permissions(&linux_dst, perms);
+            }
+        }
+        files_created.push(linux_dst);
     }
 
     // macOS App Bundle (directory)
@@ -398,7 +412,9 @@ fn copy_executables(
         copy_directory(&macos_src, &macos_dst)?;
         files_created.push(macos_dst);
     } else {
-        warnings.push(format!("macOS App Bundle not found: {macos_src:?}"));
+        warnings.push(format!("macOS App Bundle not found: {macos_src:?}; creating placeholder"));
+        create_placeholder_app_bundle(&macos_dst)?;
+        files_created.push(macos_dst);
     }
 
     Ok(())

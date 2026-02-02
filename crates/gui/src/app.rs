@@ -1223,8 +1223,9 @@ impl TesseractApp {
         // Set deriving state
         self.password_entry_state.status = AuthStatus::Deriving;
 
-        // For now, perform synchronous unlock (blocking)
-        // TODO: Move to async/thread in future story for better UX
+        // TECH DEBT: Currently performs synchronous unlock (blocking UI during key derivation).
+        // This should be moved to a background thread to maintain UI responsiveness.
+        // Tracking issue: Implement async vault unlock for responsive UI
         match crate::screens::attempt_authentication(&header, &password, &params) {
             Ok(master_key) => {
                 info!("Vault unlocked successfully");
@@ -7230,7 +7231,7 @@ mod tests {
         let mut app = TesseractApp::new();
 
         // Set a fake master key
-        app.master_key = Some([42u8; 32]);
+        app.master_key = Some(Zeroizing::new([42u8; 32]));
 
         app.lock_vault();
 

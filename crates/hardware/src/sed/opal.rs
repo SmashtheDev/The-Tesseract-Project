@@ -229,12 +229,64 @@ impl OpalDrive {
 
     /// Initialize the drive with a password.
     ///
+    /// Uses sedutil-cli to perform initial setup of the drive's Opal security.
+    /// This sets the SID (Security ID) and Admin1 passwords and enables locking.
+    ///
     /// # Warning
     ///
-    /// This may erase all data on the drive.
-    pub fn initialize(&mut self, _password: &[u8]) -> Result<()> {
-        // TODO: Implement
-        Err(HardwareError::OpalNotSupported)
+    /// This may erase all data on the drive depending on the drive's configuration.
+    /// Ensure data is backed up before initialization.
+    ///
+    /// # Arguments
+    ///
+    /// * `password` - The password to set for the drive
+    ///
+    /// # Errors
+    ///
+    /// Returns an error if:
+    /// - The drive does not support Opal
+    /// - The drive is already initialized
+    /// - sedutil-cli is not available
+    /// - Insufficient permissions
+    pub fn initialize(&mut self, password: &[u8]) -> Result<()> {
+        // Check current status
+        match self.status {
+            OpalStatus::NotSupported => {
+                return Err(HardwareError::OpalNotSupported);
+            }
+            OpalStatus::Locked | OpalStatus::Unlocked => {
+                // Already initialized
+                return Err(HardwareError::CommandFailed {
+                    command: "initialize".to_string(),
+                    reason: "Drive is already initialized".to_string(),
+                });
+            }
+            OpalStatus::Uninitialized => {
+                // Proceed with initialization
+            }
+        }
+
+        #[cfg(unix)]
+        {
+            initialize_opal_unix(&self.device_path, password)?;
+            self.status = OpalStatus::Unlocked;
+            Ok(())
+        }
+
+        #[cfg(windows)]
+        {
+            initialize_opal_windows(&self.device_path, password)?;
+            self.status = OpalStatus::Unlocked;
+            Ok(())
+        }
+
+        #[cfg(not(any(unix, windows)))]
+        {
+            let _ = password;
+            Err(HardwareError::PlatformNotSupported {
+                platform: "non-Unix/Windows".to_string(),
+            })
+        }
     }
 }
 
@@ -560,6 +612,173 @@ fn unlock_opal_linux(device_path: &Path, password: &[u8]) -> Result<()> {
         }
         Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
             Err(HardwareError::permission_denied("run sedutil-cli"))
+        }
+        Err(e) => Err(HardwareError::Io(e)),
+    }
+}
+
+/// Initialize an Opal drive on Unix using sedutil-cli.
+///
+/// Uses `sedutil-cli --initialSetup <password> <device>` to perform initial
+/// Opal security setup.
+///
+/// # Arguments
+///
+/// * `device_path` - Path to the device (e.g., /dev/sda)
+/// * `password` - The password to set for the drive
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - sedutil-cli is not available
+/// - Insufficient permissions
+/// - Drive is already initialized
+#[cfg(unix)]
+fn initialize_opal_unix(device_path: &Path, password: &[u8]) -> Result<()> {
+    use std::process::Command;
+
+    // Convert password to string (sedutil requires ASCII password)
+    let password_str = String::from_utf8_lossy(password);
+
+    // sedutil-cli --initialSetup <password> <device>
+    // This command:
+    // 1. Takes ownership of the drive (sets SID password)
+    // 2. Sets Admin1 password
+    // 3. Enables locking on the global range
+    let output = Command::new("sedutil-cli")
+        .arg("--initialSetup")
+        .arg(password_str.as_ref())
+        .arg(device_path)
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            // Verify initialization by querying status
+            let verify_output = Command::new("sedutil-cli")
+                .arg("--query")
+                .arg(device_path)
+                .output();
+
+            if let Ok(verify) = verify_output {
+                let stdout = String::from_utf8_lossy(&verify.stdout);
+                let status = parse_sedutil_query_output(&stdout);
+                if status == OpalStatus::Unlocked || status == OpalStatus::Locked {
+                    return Ok(());
+                }
+            }
+
+            // Command succeeded, trust the result
+            Ok(())
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let combined = format!("{}{}", stdout, stderr).to_lowercase();
+
+            if combined.contains("already") || combined.contains("ownership") {
+                Err(HardwareError::CommandFailed {
+                    command: "sedutil-cli --initialSetup".to_string(),
+                    reason: "Drive is already initialized or owned".to_string(),
+                })
+            } else if combined.contains("not an opal") || combined.contains("not supported") {
+                Err(HardwareError::OpalNotSupported)
+            } else {
+                Err(HardwareError::CommandFailed {
+                    command: "sedutil-cli --initialSetup".to_string(),
+                    reason: stderr.to_string(),
+                })
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(HardwareError::ToolNotFound {
+                tool: "sedutil-cli".to_string(),
+            })
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(HardwareError::permission_denied("run sedutil-cli"))
+        }
+        Err(e) => Err(HardwareError::Io(e)),
+    }
+}
+
+/// Initialize an Opal drive on Windows using sedutil.exe.
+///
+/// Uses `sedutil.exe --initialSetup <password> <device>` to perform initial
+/// Opal security setup.
+///
+/// # Arguments
+///
+/// * `device_path` - Path to the device (e.g., \\.\PhysicalDrive1)
+/// * `password` - The password to set for the drive
+///
+/// # Errors
+///
+/// Returns an error if:
+/// - sedutil.exe is not available
+/// - Insufficient permissions (requires Administrator)
+/// - Drive is already initialized
+#[cfg(windows)]
+fn initialize_opal_windows(device_path: &Path, password: &[u8]) -> Result<()> {
+    use std::process::Command;
+
+    // Convert password to string (sedutil requires ASCII password)
+    let password_str = String::from_utf8_lossy(password);
+    let device_str = device_path.to_string_lossy();
+
+    // sedutil.exe --initialSetup <password> <device>
+    let output = Command::new("sedutil.exe")
+        .arg("--initialSetup")
+        .arg(password_str.as_ref())
+        .arg(device_str.as_ref())
+        .output();
+
+    match output {
+        Ok(output) if output.status.success() => {
+            // Verify initialization by querying status
+            let verify_output = Command::new("sedutil.exe")
+                .arg("--query")
+                .arg(device_str.as_ref())
+                .output();
+
+            if let Ok(verify) = verify_output {
+                let stdout = String::from_utf8_lossy(&verify.stdout);
+                let status = parse_sedutil_query_output_windows(&stdout);
+                if status == OpalStatus::Unlocked || status == OpalStatus::Locked {
+                    return Ok(());
+                }
+            }
+
+            // Command succeeded, trust the result
+            Ok(())
+        }
+        Ok(output) => {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let stdout = String::from_utf8_lossy(&output.stdout);
+            let combined = format!("{}{}", stdout, stderr).to_lowercase();
+
+            if combined.contains("already") || combined.contains("ownership") {
+                Err(HardwareError::CommandFailed {
+                    command: "sedutil.exe --initialSetup".to_string(),
+                    reason: "Drive is already initialized or owned".to_string(),
+                })
+            } else if combined.contains("not an opal") || combined.contains("not supported") {
+                Err(HardwareError::OpalNotSupported)
+            } else if combined.contains("requires elevation") || combined.contains("administrator") {
+                Err(HardwareError::permission_denied("run sedutil.exe"))
+            } else {
+                Err(HardwareError::CommandFailed {
+                    command: "sedutil.exe --initialSetup".to_string(),
+                    reason: stderr.to_string(),
+                })
+            }
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => {
+            Err(HardwareError::ToolNotFound {
+                tool: "sedutil.exe".to_string(),
+            })
+        }
+        Err(e) if e.kind() == std::io::ErrorKind::PermissionDenied => {
+            Err(HardwareError::permission_denied("run sedutil.exe"))
         }
         Err(e) => Err(HardwareError::Io(e)),
     }

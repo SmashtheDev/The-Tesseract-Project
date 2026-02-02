@@ -44,10 +44,9 @@ fn create_test_vault() -> (TempDir, VaultSession) {
     let vault_path = temp_dir.path().join("vault");
 
     // Create vault with default configuration
-    let config = VaultConfig::new()
-        .with_password(b"test_password_123");
+    let config = VaultConfig::new();
 
-    let _result = create_vault(&vault_path, config)
+    let _result = create_vault(&vault_path, b"test_password_123", Some(config))
         .expect("Failed to create test vault");
 
     // Open the vault
@@ -57,6 +56,19 @@ fn create_test_vault() -> (TempDir, VaultSession) {
     assert_eq!(session.state(), SessionState::Active);
 
     (temp_dir, session)
+}
+
+/// Helper to extract filename from a path.
+fn extract_filename(path: &str) -> &str {
+    path.rsplit('/').next().unwrap_or(path)
+}
+
+/// Helper to extract directory from a path.
+fn extract_dir(path: &str) -> &str {
+    match path.rfind('/') {
+        Some(pos) if pos > 0 => &path[..pos],
+        _ => "/",
+    }
 }
 
 /// Create test file content with a recognizable pattern.
@@ -95,7 +107,8 @@ fn test_create_file_read_back_verify_content() {
     let file_uuid = import_bytes(
         &mut session,
         &content,
-        "/test_file.txt",
+        "test_file.txt",
+        "/",
         1, // Access level 1
     ).expect("Failed to import file");
 
@@ -109,7 +122,7 @@ fn test_create_file_read_back_verify_content() {
 
     // Verify metadata
     assert!(metadata.plaintext.name.contains("test_file"), "Filename not preserved");
-    assert_eq!(metadata.access_level, 1, "Access level mismatch");
+    assert_eq!(metadata.access_level(), 1, "Access level mismatch");
 }
 
 #[test]
@@ -131,7 +144,7 @@ fn test_create_file_various_sizes() {
         let content = create_test_content(&format!("size_{size}"), *size);
         let path = format!("/test_size_{i}.bin");
 
-        let file_uuid = import_bytes(&mut session, &content, &path, 1)
+        let file_uuid = import_bytes(&mut session, &content, extract_filename(&path), extract_dir(&path), 1)
             .expect(&format!("Failed to import file of size {size}"));
 
         let (read_content, _metadata) = export_to_bytes(&session, file_uuid)
@@ -165,7 +178,7 @@ fn test_create_file_special_characters_in_name() {
     for filename in filenames {
         let path = format!("/{filename}");
 
-        let result = import_bytes(&mut session, &content, &path, 1);
+        let result = import_bytes(&mut session, &content, extract_filename(&path), extract_dir(&path), 1);
 
         match result {
             Ok(file_uuid) => {
@@ -196,7 +209,7 @@ fn test_write_close_reopen_verify() {
 
     // Create and import a file
     let content = create_test_content("persistence", 2048);
-    let file_uuid = import_bytes(&mut session, &content, "/persistent.txt", 1)
+    let file_uuid = import_bytes(&mut session, &content, "persistent.txt", "/", 1)
         .expect("Failed to import file");
 
     // Get the vault path before dropping session
@@ -233,7 +246,7 @@ fn test_multiple_files_persist() {
             let content = create_test_content(&name, 512 + i * 100);
             let path = format!("/{name}.txt");
 
-            let uuid = import_bytes(&mut session, &content, &path, 1)
+            let uuid = import_bytes(&mut session, &content, extract_filename(&path), extract_dir(&path), 1)
                 .expect(&format!("Failed to import file_{i}"));
 
             (uuid, name, content)
@@ -263,7 +276,7 @@ fn test_modify_file_persist() {
 
     // Create initial file
     let content_v1 = create_test_content("version1", 1000);
-    let file_uuid = import_bytes(&mut session, &content_v1, "/mutable.txt", 1)
+    let file_uuid = import_bytes(&mut session, &content_v1, "mutable.txt", "/", 1)
         .expect("Failed to import initial file");
 
     // "Modify" the file by deleting and re-importing with same name
@@ -271,7 +284,7 @@ fn test_modify_file_persist() {
         .expect("Failed to delete old version");
 
     let content_v2 = create_test_content("version2", 2000);
-    let file_uuid_v2 = import_bytes(&mut session, &content_v2, "/mutable.txt", 1)
+    let file_uuid_v2 = import_bytes(&mut session, &content_v2, "mutable.txt", "/", 1)
         .expect("Failed to import modified file");
 
     let vault_path = session.vault_path().to_path_buf();
@@ -304,7 +317,7 @@ fn test_delete_file_not_accessible() {
 
     // Create a file
     let content = create_test_content("to_delete", 500);
-    let file_uuid = import_bytes(&mut session, &content, "/to_delete.txt", 1)
+    let file_uuid = import_bytes(&mut session, &content, "to_delete.txt", "/", 1)
         .expect("Failed to import file");
 
     // Verify file exists
@@ -326,9 +339,9 @@ fn test_delete_file_not_in_listing() {
 
     // Create multiple files
     let content = create_test_content("file", 256);
-    let uuid1 = import_bytes(&mut session, &content, "/keep1.txt", 1).unwrap();
-    let uuid2 = import_bytes(&mut session, &content, "/delete_me.txt", 1).unwrap();
-    let uuid3 = import_bytes(&mut session, &content, "/keep2.txt", 1).unwrap();
+    let uuid1 = import_bytes(&mut session, &content, "keep1.txt", "/", 1).unwrap();
+    let uuid2 = import_bytes(&mut session, &content, "delete_me.txt", "/", 1).unwrap();
+    let uuid3 = import_bytes(&mut session, &content, "keep2.txt", "/", 1).unwrap();
 
     // Delete the middle file
     delete_file(&mut session, uuid2).expect("Failed to delete file");
@@ -355,7 +368,7 @@ fn test_delete_persists() {
     let (temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("deleted", 256);
-    let file_uuid = import_bytes(&mut session, &content, "/deleted.txt", 1).unwrap();
+    let file_uuid = import_bytes(&mut session, &content, "deleted.txt", "/", 1).unwrap();
 
     delete_file(&mut session, file_uuid).expect("Failed to delete file");
 
@@ -387,7 +400,7 @@ fn test_rename_file_new_name_accessible() {
     let (_temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("renamed", 512);
-    let file_uuid = import_bytes(&mut session, &content, "/original.txt", 1).unwrap();
+    let file_uuid = import_bytes(&mut session, &content, "original.txt", "/", 1).unwrap();
 
     // Rename the file
     rename_file(&mut session, file_uuid, "new_name.txt")
@@ -405,7 +418,7 @@ fn test_rename_file_old_name_not_in_listing() {
     let (_temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("rename_test", 256);
-    let file_uuid = import_bytes(&mut session, &content, "/old_name.txt", 1).unwrap();
+    let file_uuid = import_bytes(&mut session, &content, "old_name.txt", "/", 1).unwrap();
 
     rename_file(&mut session, file_uuid, "new_name.txt").unwrap();
 
@@ -421,7 +434,7 @@ fn test_move_file_to_directory() {
     let (_temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("moved", 256);
-    let file_uuid = import_bytes(&mut session, &content, "/root_file.txt", 1).unwrap();
+    let file_uuid = import_bytes(&mut session, &content, "root_file.txt", "/", 1).unwrap();
 
     // Move file to subdirectory (virtual path)
     move_file(&mut session, file_uuid, "/subdir/moved_file.txt")
@@ -439,7 +452,7 @@ fn test_rename_persists() {
     let (temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("persist_rename", 256);
-    let file_uuid = import_bytes(&mut session, &content, "/before.txt", 1).unwrap();
+    let file_uuid = import_bytes(&mut session, &content, "before.txt", "/", 1).unwrap();
 
     rename_file(&mut session, file_uuid, "after.txt").unwrap();
 
@@ -480,7 +493,7 @@ fn test_directory_listing_single_file() {
     let (_temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("single", 100);
-    import_bytes(&mut session, &content, "/single.txt", 1).unwrap();
+    import_bytes(&mut session, &content, "single.txt", "/", 1).unwrap();
 
     let entries = list_files(&session, "/").expect("Failed to list directory");
 
@@ -507,7 +520,7 @@ fn test_directory_listing_multiple_files() {
 
     for (name, size) in &files_to_create {
         let content = create_test_content(name, *size);
-        import_bytes(&mut session, &content, &format!("/{name}"), 1).unwrap();
+        import_bytes(&mut session, &content, name, "/", 1).unwrap();
     }
 
     let entries = list_files(&session, "/").expect("Failed to list directory");
@@ -533,10 +546,10 @@ fn test_directory_listing_with_subdirectories() {
     let content = create_test_content("nested", 100);
 
     // Create files in virtual directories
-    import_bytes(&mut session, &content, "/root_file.txt", 1).unwrap();
-    import_bytes(&mut session, &content, "/docs/doc1.txt", 1).unwrap();
-    import_bytes(&mut session, &content, "/docs/doc2.txt", 1).unwrap();
-    import_bytes(&mut session, &content, "/images/photo.jpg", 1).unwrap();
+    import_bytes(&mut session, &content, "root_file.txt", "/", 1).unwrap();
+    import_bytes(&mut session, &content, "doc1.txt", "/docs", 1).unwrap();
+    import_bytes(&mut session, &content, "doc2.txt", "/docs", 1).unwrap();
+    import_bytes(&mut session, &content, "photo.jpg", "/images", 1).unwrap();
 
     // List root directory
     let root_entries = list_files(&session, "/").expect("Failed to list root");
@@ -566,7 +579,7 @@ fn test_directory_listing_access_level_filtering() {
     let content = create_test_content("level", 100);
 
     // Create files at level 1 (accessible)
-    import_bytes(&mut session, &content, "/level1_file.txt", 1).unwrap();
+    import_bytes(&mut session, &content, "level1_file.txt", "/", 1).unwrap();
 
     // List should show level 1 files
     let entries = list_files(&session, "/").expect("Failed to list directory");
@@ -587,7 +600,7 @@ fn test_directory_listing_size_accuracy() {
 
     for size in sizes {
         let content = vec![0u8; size];
-        import_bytes(&mut session, &content, &format!("/size_{size}.bin"), 1).unwrap();
+        import_bytes(&mut session, &content, &format!("size_{size}.bin"), "/", 1).unwrap();
     }
 
     let entries = list_files(&session, "/").expect("Failed to list directory");
@@ -617,7 +630,7 @@ mod dokan_tests {
         let (_temp_dir, mut session) = create_test_vault();
 
         let content = create_test_content("dokan_test", 256);
-        import_bytes(&mut session, &content, "/test.txt", 1).unwrap();
+        import_bytes(&mut session, &content, "test.txt", "/", 1).unwrap();
 
         let config = DokanConfig::new('T');
         let handler = TesseractDokanHandler::new(session, config);
@@ -653,8 +666,8 @@ mod dokan_tests {
         let (_temp_dir, mut session) = create_test_vault();
 
         let content = create_test_content("find_test", 100);
-        import_bytes(&mut session, &content, "/file1.txt", 1).unwrap();
-        import_bytes(&mut session, &content, "/file2.txt", 1).unwrap();
+        import_bytes(&mut session, &content, "file1.txt", "/", 1).unwrap();
+        import_bytes(&mut session, &content, "file2.txt", "/", 1).unwrap();
 
         let config = DokanConfig::new('T');
         let handler = TesseractDokanHandler::new(session, config);
@@ -678,7 +691,7 @@ mod dokan_tests {
         let (_temp_dir, mut session) = create_test_vault();
 
         let content = create_test_content("read_test", 512);
-        import_bytes(&mut session, &content, "/readable.txt", 1).unwrap();
+        import_bytes(&mut session, &content, "readable.txt", "/", 1).unwrap();
 
         let config = DokanConfig::new('T');
         let handler = TesseractDokanHandler::new(session, config);
@@ -739,7 +752,7 @@ mod dokan_tests {
         let (_temp_dir, mut session) = create_test_vault();
 
         let content = create_test_content("delete_test", 100);
-        import_bytes(&mut session, &content, "/to_delete.txt", 1).unwrap();
+        import_bytes(&mut session, &content, "to_delete.txt", "/", 1).unwrap();
 
         let config = DokanConfig::new('T');
         let handler = TesseractDokanHandler::new(session, config);
@@ -768,7 +781,7 @@ mod dokan_tests {
         let (_temp_dir, mut session) = create_test_vault();
 
         let content = create_test_content("move_test", 100);
-        import_bytes(&mut session, &content, "/original.txt", 1).unwrap();
+        import_bytes(&mut session, &content, "original.txt", "/", 1).unwrap();
 
         let config = DokanConfig::new('T');
         let handler = TesseractDokanHandler::new(session, config);
@@ -956,7 +969,7 @@ mod fuse_tests {
     /// Test FUSE write buffer
     #[test]
     fn test_fuse_write_buffer() {
-        let mut buffer = WriteBuffer::new_file("test.txt".to_string());
+        let mut buffer = WriteBuffer::new_file("test.txt".to_string(), 1);
 
         // Write some data
         let data = b"Hello, World!";
@@ -976,7 +989,7 @@ mod fuse_tests {
     /// Test FUSE write buffer extending writes
     #[test]
     fn test_fuse_write_buffer_extend() {
-        let mut buffer = WriteBuffer::new_file("test.txt".to_string());
+        let mut buffer = WriteBuffer::new_file("test.txt".to_string(), 1);
 
         // Write at offset 0
         buffer.write_at(0, b"Hello");
@@ -998,7 +1011,7 @@ mod fuse_tests {
     /// Test FUSE write buffer set end of file
     #[test]
     fn test_fuse_write_buffer_set_eof() {
-        let mut buffer = WriteBuffer::new_file("test.txt".to_string());
+        let mut buffer = WriteBuffer::new_file("test.txt".to_string(), 1);
 
         // Write some data
         buffer.write_at(0, b"Hello, World!");
@@ -1026,7 +1039,7 @@ mod fuse_tests {
         let (_temp_dir, mut session) = create_test_vault();
 
         let content = create_test_content("fuse_test", 256);
-        let file_uuid = import_bytes(&mut session, &content, "/fuse_file.txt", 1).unwrap();
+        let file_uuid = import_bytes(&mut session, &content, "fuse_file.txt", "/", 1).unwrap();
 
         // Verify via vault API (FUSE handler uses these internally)
         let entries = list_files(&session, "/").unwrap();
@@ -1053,7 +1066,7 @@ fn test_file_uuid_stability() {
     let (_temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("uuid_test", 100);
-    let file_uuid = import_bytes(&mut session, &content, "/stable_uuid.txt", 1).unwrap();
+    let file_uuid = import_bytes(&mut session, &content, "stable_uuid.txt", "/", 1).unwrap();
 
     // UUID should be valid
     assert!(!file_uuid.is_nil(), "UUID should not be nil");
@@ -1074,7 +1087,7 @@ fn test_concurrent_read_safety() {
     let (_temp_dir, mut session) = create_test_vault();
 
     let content = create_test_content("concurrent", 1024);
-    let file_uuid = import_bytes(&mut session, &content, "/concurrent.txt", 1).unwrap();
+    let file_uuid = import_bytes(&mut session, &content, "concurrent.txt", "/", 1).unwrap();
 
     let vault_path = session.vault_path().to_path_buf();
     drop(session);
@@ -1091,7 +1104,7 @@ fn test_concurrent_read_safety() {
             let expected = Arc::clone(&expected_content);
 
             thread::spawn(move || {
-                let session = open_vault(&path, b"test_password_123", None).unwrap();
+                let session = open_vault(&*path, b"test_password_123", None).unwrap();
                 let (read_content, _) = export_to_bytes(&session, *uuid).unwrap();
                 assert_eq!(read_content, *expected, "Concurrent read should match");
             })
@@ -1112,7 +1125,7 @@ fn test_large_file_handling() {
     let size = 1024 * 1024;
     let content = create_test_content("large", size);
 
-    let file_uuid = import_bytes(&mut session, &content, "/large_file.bin", 1)
+    let file_uuid = import_bytes(&mut session, &content, "large_file.bin", "/", 1)
         .expect("Should handle 1MB file");
 
     let (read_content, metadata) = export_to_bytes(&session, file_uuid)

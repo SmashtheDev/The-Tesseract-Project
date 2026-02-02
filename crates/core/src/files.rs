@@ -274,6 +274,7 @@ pub fn import_file<P: AsRef<Path>>(
     write_blob(session.vault_path(), file_uuid, &dek, &plaintext)?;
 
     // Create and write encrypted metadata
+    // For import_file, dest_path is always the full virtual path (including filename)
     let metadata_plaintext = MetadataPlaintext::new(
         filename,
         dest_path.to_string(),
@@ -360,9 +361,24 @@ pub fn import_bytes(
     write_blob(session.vault_path(), file_uuid, &dek, content)?;
 
     // Create and write encrypted metadata
+    // Determine if dest_path is a full path (already ends with the filename) or a directory
+    let full_path = if dest_path.ends_with(&format!("/{}", filename)) || dest_path == format!("/{}", filename) {
+        // dest_path already contains the filename (e.g., "/data/memory.txt" with filename "memory.txt")
+        dest_path.to_string()
+    } else if dest_path == "/" {
+        // Root directory - just prepend /
+        format!("/{}", filename)
+    } else if dest_path.ends_with('/') {
+        // Directory path with trailing slash
+        format!("{}{}", dest_path, filename)
+    } else {
+        // Directory path without trailing slash - append /filename
+        format!("{}/{}", dest_path, filename)
+    };
+
     let metadata_plaintext = MetadataPlaintext::new(
         filename.to_string(),
-        dest_path.to_string(),
+        full_path,
         level,
         file_size,
         file_uuid,
